@@ -1,9 +1,12 @@
 pragma solidity ^0.4.19;
 
+import 'zeppelin-solidity/contracts/math/SafeMath.sol';
+
 /**
  * The PayoutLib
  */
 library PayoutBacklogLib {
+  using SafeMath for uint256;
 
   struct Payout {
     uint amount;
@@ -16,6 +19,9 @@ library PayoutBacklogLib {
     address[] winners;
   }
   
+  event LogPayWinner(address winner, uint amount);
+  event LogDeleteWinner(address winner);
+
   function addPrizeToWinner(PayoutBacklog storage payoutBacklog, address winner, uint amount, uint period) {
     Payout payout = payoutBacklog.backlog[winner];
     if (payout.period == 0) {
@@ -25,7 +31,7 @@ library PayoutBacklogLib {
     } else if (period > payout.period) {
       payout.period = period;
     }
-    payout.amount = payout.amount + amount;
+    payout.amount = payout.amount.add(amount);
     payoutBacklog.backlog[winner] = payout;
   }
   
@@ -34,12 +40,13 @@ library PayoutBacklogLib {
     for (uint i = 0; i < payoutBacklog.winners.length; i++) {
       address winner = payoutBacklog.winners[i];
       Payout payout = payoutBacklog.backlog[winner];
-      uint payoutAmount = payout.amount / payout.period;
+      uint payoutAmount = payout.amount.div(payout.period);
 
       if (payoutAmount >= threshold) {
+        LogPayWinner(winner, payoutAmount);
         winner.transfer(payoutAmount);
-        payout.period = payout.period - 1;
-        payout.amount = payout.amount - payoutAmount;
+        payout.period = payout.period.sub(1);
+        payout.amount = payout.amount.sub(payoutAmount);
 
         if (payout.period == 0) {
           deleteWinner(payoutBacklog, payout, winner);
@@ -50,6 +57,7 @@ library PayoutBacklogLib {
 
   /** Delete winner address from backlog once all his prizes are paid out */
   function deleteWinner(PayoutBacklog storage payoutBacklog, Payout payout, address winner) internal {
+    LogDeleteWinner(winner);
     payoutBacklog.winners[payout.index] = payoutBacklog.winners[payoutBacklog.winners.length-1];
     payoutBacklog.winners.length--;
     delete payoutBacklog.backlog[winner];

@@ -1,18 +1,22 @@
 pragma solidity ^0.4.19;
 
-import 'zeppelin-solidity/contracts/ownership/Ownable.sol';
 import './PayoutBacklogLib.sol';
+
+import 'zeppelin-solidity/contracts/lifecycle/TokenDestructible.sol';
 
 /**
  * The PayoutBacklogStorage contract
  * Store backlog to ensure every winner gets paid. And info never gets lost
  */
-contract PayoutBacklogStorage is Ownable {
+contract PayoutBacklogStorage is TokenDestructible {
   using PayoutBacklogLib for PayoutBacklogLib.PayoutBacklog;
 
   PayoutBacklogLib.PayoutBacklog payoutBacklog;
 
+  event LogAddPrizeWinnerToBacklog(address winner, uint amount, uint period);
+
   function addPrizeToWinner(address winner, uint amount, uint period) onlyOwner {
+    LogAddPrizeWinnerToBacklog(winner, amount, period);
     payoutBacklog.addPrizeToWinner(winner, amount, period);
   }
   
@@ -37,4 +41,3 @@ contract PayoutBacklogStorage is Ownable {
   }
   
 }
-

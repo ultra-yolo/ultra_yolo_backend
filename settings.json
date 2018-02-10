@@ -1,6 +1,6 @@
 {
   "ticketPriceEth": 0.001e18,
   "ticketPriceYolo": 200e18,
-  "payoutValues": [1000e18, 5e18, 1e17, 1e16, 4e16],
-  "payoutPeriods": [50, 10, 5, 1, 1]
+  "payoutValues": [1e18, 1e17, 1e16, 1e15, 4e15],
+  "payoutPeriods": [10, 5, 2, 1, 1]
 }

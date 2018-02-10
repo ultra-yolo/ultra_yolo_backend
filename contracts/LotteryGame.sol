@@ -1,20 +1,24 @@
 pragma solidity ^0.4.19;
 
-import 'zeppelin-solidity/contracts/lifecycle/TokenDestructible.sol';
-
 import './ERC223ReceivingContract.sol';
 import './PayoutBacklogStorage.sol';
 
 import './LotteryStorageLib.sol';
 import './LotteryLib.sol';
 
+import 'zeppelin-solidity/contracts/lifecycle/TokenDestructible.sol';
+import 'zeppelin-solidity/contracts/math/SafeMath.sol';
+
 contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
   using LotteryStorageLib for LotteryStorageLib.LotteryStorage;
   using LotteryLib for LotteryLib.Lottery;
+  using SafeMath for uint256;
 
-  event LogLotteryEntry(bytes lottery);
-  event LogLotteryEntry(byte[6] lottery);
-  event UIConfirmEntry(byte[6] lottery);
+  event LogNonUILotteryEntry(address indexed player, bytes lottery);
+  event LogUIConfirmEntry(address indexed player, byte[6] lottery);
+  event LogLotteryResult(byte[6] result);
+  event LogPrizeWinners(uint indexed prizeIndex, address[] winners);
+  event LogLotteryEntry(byte[6] entry);
 
   /** ticket price in YOLO token */
   uint public ticketPriceYolo;
@@ -29,7 +33,7 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
 
   /** lottery ticket storage */
   LotteryStorageLib.LotteryStorage lotteryStorage;
-  /** lottery */
+  /** lottery placeholder variable */
   LotteryLib.Lottery lottery;
   /** payout threshold. since eth gas price, small prizes will be stored in the backlog
     * and distributed once it passes this threshold */
@@ -55,13 +59,12 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
 
   function () external payable {
     require(msg.value >= ticketPriceEth);
-    LogLotteryEntry(msg.data);
+    LogNonUILotteryEntry(msg.sender, msg.data);
     lotteryStorage.enterLottery(lottery, msg.data, msg.sender);
   }
 
   function enterLottery(byte[6] entry, bool fromWebUI) public payable {
     require(msg.value >= ticketPriceEth);
-    LogLotteryEntry(entry);
     if (fromWebUI) {
       /** necessary for entries passed through web3 but not metamask or remix */
       for (uint i = 0; i < 6; i++) {
@@ -69,10 +72,11 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
       }
     }
     lotteryStorage.enterLottery(lottery, entry, msg.sender);
-    UIConfirmEntry(entry);
+    LogUIConfirmEntry(msg.sender, entry);
   }
 
   function receiveResult(byte[6] result) public onlyResultGenerator {
+    LogLotteryResult(result);
     processResult(result);
   }
 
@@ -82,6 +86,8 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
       uint prizeIndex = getPrizeIndex(entry, result);
       if (prizeIndex <= 4) {
         address[] memory prizeWinners = lotteryStorage.getWinners(entry);
+        LogPrizeWinners(prizeIndex, prizeWinners);
+        LogLotteryEntry(entry.ticket);
         addPrizesToBacklog(prizeWinners, prizeIndex);
       }
     }
@@ -91,7 +97,7 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
   function addPrizesToBacklog(address[] prizeWinners, uint prizeIndex) internal {
     uint numPrizeWinners = prizeWinners.length;
     if (numPrizeWinners > 0) {  // check shouldn't be necessary, for extra safety
-      uint payoutAmount = (payoutValues[prizeIndex] / payoutPeriods[prizeIndex]) / numPrizeWinners;
+      uint payoutAmount = payoutValues[prizeIndex].div(payoutPeriods[prizeIndex]).div(numPrizeWinners);
       for (uint i = 0; i < numPrizeWinners; i++) {
         payoutBacklogStorage.addPrizeToWinner(prizeWinners[i], payoutAmount, payoutPeriods[prizeIndex]);
       }
@@ -136,26 +142,6 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
     lotteryStorage = _lotteryStorage;
   }
 
-  function tokenFallback(address _from, uint _value, bytes _data) public {
-    
-  }
-
-  function getNumLotteries() returns(uint) {
-    return lotteryStorage.numLotteries();
-  }
-  
-  function getLotteryAtIndex(uint index) returns(byte[6]) {
-    LotteryLib.Lottery memory entry = lotteryStorage.getLottery(index);
-    LogLotteryEntry(entry.ticket);
-    return entry.ticket;
-  }
-  
-  function getPlayerAddressesAtIndex(uint index) returns(address[]) {
-    LotteryLib.Lottery storage entry = lotteryStorage.lotteries[index];
-    address[] memory prizeWinners = lotteryStorage.getWinners(entry);
-    return prizeWinners;
-  }
-
   function resetPayoutStorage(address _payoutBacklogStorageAddress) onlyOwner public {
     payoutBacklogStorage = PayoutBacklogStorage(_payoutBacklogStorageAddress);
   }
@@ -164,4 +150,26 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
     payoutBacklogStorage.transferOwnership(owner);
   }
   
+  function tokenFallback(address _from, uint _value, bytes _data) public {
+    require(_value > ticketPriceYolo);
+    LogNonUILotteryEntry(_from, _data);
+    lotteryStorage.enterLottery(lottery, _data, msg.sender);
+  }
+
+  /** helper functions to read contents of the game */
+  function getNumLotteries() public returns(uint) {
+    return lotteryStorage.numLotteries();
+  }
+  
+  function getLotteryAtIndex(uint index) public returns(byte[6]) {
+    LotteryLib.Lottery memory entry = lotteryStorage.getLottery(index);
+    return entry.ticket;
+  }
+  
+  function getPlayerAddressesAtIndex(uint index) public returns(address[]) {
+    LotteryLib.Lottery storage entry = lotteryStorage.lotteries[index];
+    address[] memory prizeWinners = lotteryStorage.getWinners(entry);
+    return prizeWinners;
+  }
+
 }
