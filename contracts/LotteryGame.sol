@@ -48,21 +48,28 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
 
   /**
     * constructor
+    * @param _payoutBacklogStorageAddress jackpot address to distribute funds from
+    * @param _ticketPriceEth ticket price in eth for people buying lottery in eth
+    * @param _ticketPriceYolo ticket price in YOLO token for people buying via YOLO token
+    * @param _payoutValues prizes in eth for grand prize to smallest prizes
+    * @param _payoutPeriods number of weeks it takes to distribute prizes to winners. 1 measn distribute at once
   **/
   function LotteryGame(address _payoutBacklogStorageAddress, uint _ticketPriceEth, uint _ticketPriceYolo, uint[5] _payoutValues, uint[5] _payoutPeriods) {
+    payoutBacklogStorage = PayoutBacklogStorage(_payoutBacklogStorageAddress);
     ticketPriceEth = _ticketPriceEth;
     ticketPriceYolo = _ticketPriceYolo;
     payoutValues = _payoutValues;
     payoutPeriods = _payoutPeriods;
-    payoutBacklogStorage = PayoutBacklogStorage(_payoutBacklogStorageAddress);
   }
 
+  /** lottery entry through non-ui channels. ie:  */
   function () external payable {
     require(msg.value >= ticketPriceEth);
     LogNonUILotteryEntry(msg.sender, msg.data);
     lotteryStorage.enterLottery(lottery, msg.data, msg.sender);
   }
 
+  /** lottery entry through ui */
   function enterLottery(byte[6] entry, bool fromWebUI) public payable {
     require(msg.value >= ticketPriceEth);
     if (fromWebUI) {
@@ -75,11 +82,13 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
     LogUIConfirmEntry(msg.sender, entry);
   }
 
+  /** notification of lottery result */
   function receiveResult(byte[6] result) public onlyResultGenerator {
     LogLotteryResult(result);
     processResult(result);
   }
 
+  /** internal helper function */
   function processResult(byte[6] result) internal {
     for (uint i = 0; i < lotteryStorage.numLotteries(); i++) {
       LotteryLib.Lottery storage entry = lotteryStorage.lotteries[i];
