@@ -63,7 +63,7 @@ contract LotteryResultGenerator is Ownable, usingOraclize {
   function __callback(bytes32 betId, string result, bytes proof) public
     onlyOraclize
     onlyIfBetExists(betId)
-    // oraclize_randomDS_proofVerify(betId, result, proof)
+    oraclize_randomDS_proofVerify(betId, result, proof)
   {
     numDigitsLeft--;
     byte resultByte = byte((uint(bytes(result)[0]) % MODULO) + 1);

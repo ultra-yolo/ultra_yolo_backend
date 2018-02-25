@@ -103,6 +103,10 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
     payoutBacklogStorage.pay(payoutThreshold);
   }
 
+  /** add grand prize, 5-number match, 4-number match to the backlog, and pay them in subsequent weeks
+    * @param prizeWinners winners we need to add to the backlog
+    * @param prizeIndex prize that they won (0 is grand prize, 1 is 5-num match, etc)
+  **/
   function addPrizesToBacklog(address[] prizeWinners, uint prizeIndex) internal {
     uint numPrizeWinners = prizeWinners.length;
     if (numPrizeWinners > 0) {  // check shouldn't be necessary, for extra safety
@@ -113,30 +117,38 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
     }
   }
 
+  /** get what prize each lottery ticket won, 0 means grand prize, 1 is 5-num match, etc. */
   function getPrizeIndex(LotteryLib.Lottery storage entry, byte[6] result) internal returns (uint) {
     return entry.getNumNotMatching(result);
   }
 
+  /** sets the prize value for each prize, default definded in `settings.json` */
   function resetPrize(uint index, uint value) public onlyOwner {
     payoutValues[index] = value;
   }
 
+  /** sets the payout period for each prize, default definded in `settings.json` */
   function resetPrizePayoutPeriod(uint index, uint period) public onlyOwner {
     payoutPeriods[index] = period;
   }
   
+  /** sets the ticket price in eth for each lottery ticket. default defined in `settings.json` */
   function setTicketPriceEth(uint _ticketPriceEth) public onlyOwner {
     ticketPriceEth = _ticketPriceEth;
   }
 
+  /** sets the ticket price in YOLO token for each lottery ticket. default defined in `settings.json` */
   function setTicketPriceYolo(uint _ticketPriceYolo) public onlyOwner {
     ticketPriceYolo = _ticketPriceYolo;
   }
 
+  /** sets the lottery result generator address. only this address can announce lottery result */
   function setResultGeneratorAddress(address _resultGeneratorAddress) public onlyOwner {
     resultGeneratorAddress = _resultGeneratorAddress;
   }
   
+  /** sets the payout threshold. if win value is less than this threshold, we hold until a later date to distribute
+      a payout to this winner */
   function setPayoutThreshold(uint _payoutThreshold) onlyOwner {
     payoutThreshold = _payoutThreshold;
   }
@@ -146,11 +158,13 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
     owner.transfer(amount);
   }
 
+  /** reset tickets in lottery and start new round */
   function startNewRound() public onlyOwner {
     LotteryStorageLib.LotteryStorage storage _lotteryStorage;
     lotteryStorage = _lotteryStorage;
   }
 
+  /** in case any logic changes in payout storage */
   function resetPayoutStorage(address _payoutBacklogStorageAddress) onlyOwner public {
     payoutBacklogStorage = PayoutBacklogStorage(_payoutBacklogStorageAddress);
   }
@@ -159,6 +173,7 @@ contract LotteryGame is ERC223ReceivingContract, TokenDestructible {
     payoutBacklogStorage.transferOwnership(owner);
   }
   
+  /** implementation of erc-223. transfer function of YOLO tokens calls this function in the contract */
   function tokenFallback(address _from, uint _value, bytes _data) public {
     require(_value > ticketPriceYolo);
     LogNonUILotteryEntry(_from, _data);
